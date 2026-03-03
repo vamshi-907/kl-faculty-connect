@@ -97,8 +97,8 @@ export default function AdminDashboard() {
     reader.readAsBinaryString(file);
   };
 
-  const handleSaveExcelData = () => {
-    uploadFacultyData(excelData);
+  const handleSaveExcelData = async () => {
+    await uploadFacultyData(excelData);
     setExcelData([]);
     setShowPreview(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -109,16 +109,16 @@ export default function AdminDashboard() {
     });
   };
 
-  const handleApprove = (id: string) => {
-    approveContribution(id);
+  const handleApprove = async (id: string) => {
+    await approveContribution(id);
     toast({
       title: 'Approved!',
       description: 'The contribution has been approved and the faculty list is updated.',
     });
   };
 
-  const handleReject = (id: string) => {
-    rejectContribution(id);
+  const handleReject = async (id: string) => {
+    await rejectContribution(id);
     toast({
       title: 'Rejected',
       description: 'The contribution has been rejected.',
@@ -135,9 +135,9 @@ export default function AdminDashboard() {
     markContributionViewed(contribution.id);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editingId) {
-      editContribution(editingId, editForm);
+      await editContribution(editingId, editForm);
       setEditingId(null);
       setEditForm({});
       toast({

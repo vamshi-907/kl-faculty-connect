@@ -82,9 +82,8 @@ export default function ContributeFaculty() {
 
     setIsSubmitting(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      addContribution({
+    try {
+      await addContribution({
         studentId: formData.studentId.trim(),
         studentName: formData.studentName.trim(),
         facultyName: formData.facultyName.trim(),
@@ -100,7 +99,6 @@ export default function ContributeFaculty() {
         description: 'Your contribution is pending admin approval. Thank you for helping!',
       });
 
-      // Reset form after success animation
       setTimeout(() => {
         setFormData({
           studentId: '',
@@ -111,7 +109,14 @@ export default function ContributeFaculty() {
         });
         setIsSuccess(false);
       }, 2000);
-    }, 1000);
+    } catch {
+      setIsSubmitting(false);
+      toast({
+        title: 'Error',
+        description: 'Failed to submit contribution. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleChange = (field: keyof FormData, value: string) => {
