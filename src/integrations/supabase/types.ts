@@ -14,7 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      contributions: {
+        Row: {
+          cabin: string
+          department: string
+          faculty_name: string
+          id: string
+          is_new: boolean
+          status: string
+          student_id: string
+          student_name: string
+          submitted_at: string
+        }
+        Insert: {
+          cabin: string
+          department: string
+          faculty_name: string
+          id?: string
+          is_new?: boolean
+          status?: string
+          student_id: string
+          student_name: string
+          submitted_at?: string
+        }
+        Update: {
+          cabin?: string
+          department?: string
+          faculty_name?: string
+          id?: string
+          is_new?: boolean
+          status?: string
+          student_id?: string
+          student_name?: string
+          submitted_at?: string
+        }
+        Relationships: []
+      }
+      faculty: {
+        Row: {
+          cabin: string
+          contributed_by: string
+          created_at: string
+          department: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          cabin: string
+          contributed_by?: string
+          created_at?: string
+          department: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          cabin?: string
+          contributed_by?: string
+          created_at?: string
+          department?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

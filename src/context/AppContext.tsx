@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface Faculty {
   id: string;
@@ -24,105 +25,132 @@ interface AppContextType {
   faculty: Faculty[];
   contributions: Contribution[];
   isAdmin: boolean;
-  setFaculty: React.Dispatch<React.SetStateAction<Faculty[]>>;
-  addContribution: (contribution: Omit<Contribution, 'id' | 'status' | 'submittedAt' | 'isNew'>) => void;
-  approveContribution: (id: string) => void;
-  rejectContribution: (id: string) => void;
-  editContribution: (id: string, data: Partial<Contribution>) => void;
+  loading: boolean;
+  addContribution: (contribution: Omit<Contribution, 'id' | 'status' | 'submittedAt' | 'isNew'>) => Promise<void>;
+  approveContribution: (id: string) => Promise<void>;
+  rejectContribution: (id: string) => Promise<void>;
+  editContribution: (id: string, data: Partial<Contribution>) => Promise<void>;
   loginAdmin: (username: string, password: string) => boolean;
   logoutAdmin: () => void;
-  uploadFacultyData: (data: Omit<Faculty, 'id' | 'contributedBy'>[]) => void;
-  markContributionViewed: (id: string) => void;
+  uploadFacultyData: (data: Omit<Faculty, 'id' | 'contributedBy'>[]) => Promise<void>;
+  markContributionViewed: (id: string) => Promise<void>;
+  refreshFaculty: () => Promise<void>;
+  refreshContributions: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
-
-// Initial faculty data
-const initialFaculty: Faculty[] = [
-  { id: '1', name: 'Dr. Ramesh Kumar', cabin: 'C-101', department: 'Computer Science', contributedBy: 'KLEF' },
-  { id: '2', name: 'Dr. Priya Sharma', cabin: 'C-102', department: 'Computer Science', contributedBy: 'KLEF' },
-  { id: '3', name: 'Dr. Suresh Reddy', cabin: 'E-201', department: 'Electronics', contributedBy: 'KLEF' },
-  { id: '4', name: 'Dr. Lakshmi Devi', cabin: 'E-202', department: 'Electronics', contributedBy: 'KLEF' },
-  { id: '5', name: 'Dr. Venkat Rao', cabin: 'M-301', department: 'Mechanical', contributedBy: 'KLEF' },
-  { id: '6', name: 'Dr. Anjali Gupta', cabin: 'M-302', department: 'Mechanical', contributedBy: 'KLEF' },
-  { id: '7', name: 'Dr. Krishna Murthy', cabin: 'CV-101', department: 'Civil Engineering', contributedBy: 'KLEF' },
-  { id: '8', name: 'Dr. Srinivas Rao', cabin: 'CV-102', department: 'Civil Engineering', contributedBy: 'KLEF' },
-  { id: '9', name: 'Dr. Padma Priya', cabin: 'IT-201', department: 'Information Technology', contributedBy: 'KLEF' },
-  { id: '10', name: 'Dr. Ravi Teja', cabin: 'IT-202', department: 'Information Technology', contributedBy: 'KLEF' },
-  { id: '11', name: 'Dr. Swathi Reddy', cabin: 'MBA-101', department: 'Business Administration', contributedBy: 'KLEF' },
-  { id: '12', name: 'Dr. Harish Chandra', cabin: 'MBA-102', department: 'Business Administration', contributedBy: 'KLEF' },
-];
 
 const ADMIN_USERNAME = '2200030907';
 const ADMIN_PASSWORD = 'Vamshi@130';
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [faculty, setFaculty] = useState<Faculty[]>(initialFaculty);
+  const [faculty, setFaculty] = useState<Faculty[]>([]);
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const addContribution = useCallback((contribution: Omit<Contribution, 'id' | 'status' | 'submittedAt' | 'isNew'>) => {
-    const newContribution: Contribution = {
-      ...contribution,
-      id: `contrib-${Date.now()}`,
-      status: 'pending',
-      submittedAt: new Date(),
-      isNew: true,
+  const fetchFaculty = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('faculty')
+      .select('*')
+      .order('name');
+    if (!error && data) {
+      setFaculty(data.map(f => ({
+        id: f.id,
+        name: f.name,
+        cabin: f.cabin,
+        department: f.department,
+        contributedBy: f.contributed_by,
+      })));
+    }
+  }, []);
+
+  const fetchContributions = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('contributions')
+      .select('*')
+      .order('submitted_at', { ascending: false });
+    if (!error && data) {
+      setContributions(data.map(c => ({
+        id: c.id,
+        studentId: c.student_id,
+        studentName: c.student_name,
+        facultyName: c.faculty_name,
+        cabin: c.cabin,
+        department: c.department,
+        status: c.status as 'pending' | 'approved' | 'rejected',
+        submittedAt: new Date(c.submitted_at),
+        isNew: c.is_new,
+      })));
+    }
+  }, []);
+
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([fetchFaculty(), fetchContributions()]);
+      setLoading(false);
     };
-    setContributions(prev => [newContribution, ...prev]);
-  }, []);
+    init();
+  }, [fetchFaculty, fetchContributions]);
 
-  const approveContribution = useCallback((id: string) => {
-    setContributions(prev => {
-      const contribution = prev.find(c => c.id === id);
-      if (!contribution) return prev;
-
-      // Update faculty list
-      setFaculty(prevFaculty => {
-        const existingIndex = prevFaculty.findIndex(
-          f => f.name.toLowerCase() === contribution.facultyName.toLowerCase()
-        );
-
-        if (existingIndex >= 0) {
-          // Update existing faculty
-          const updated = [...prevFaculty];
-          updated[existingIndex] = {
-            ...updated[existingIndex],
-            cabin: contribution.cabin,
-            department: contribution.department,
-            contributedBy: contribution.studentName,
-          };
-          return updated;
-        } else {
-          // Add new faculty
-          return [
-            ...prevFaculty,
-            {
-              id: `faculty-${Date.now()}`,
-              name: contribution.facultyName,
-              cabin: contribution.cabin,
-              department: contribution.department,
-              contributedBy: contribution.studentName,
-            },
-          ];
-        }
-      });
-
-      return prev.map(c => (c.id === id ? { ...c, status: 'approved', isNew: false } : c));
+  const addContribution = useCallback(async (contribution: Omit<Contribution, 'id' | 'status' | 'submittedAt' | 'isNew'>) => {
+    await supabase.from('contributions').insert({
+      student_id: contribution.studentId,
+      student_name: contribution.studentName,
+      faculty_name: contribution.facultyName,
+      cabin: contribution.cabin,
+      department: contribution.department,
     });
-  }, []);
+    await fetchContributions();
+  }, [fetchContributions]);
 
-  const rejectContribution = useCallback((id: string) => {
-    setContributions(prev =>
-      prev.map(c => (c.id === id ? { ...c, status: 'rejected', isNew: false } : c))
-    );
-  }, []);
+  const approveContribution = useCallback(async (id: string) => {
+    const contribution = contributions.find(c => c.id === id);
+    if (!contribution) return;
 
-  const editContribution = useCallback((id: string, data: Partial<Contribution>) => {
-    setContributions(prev =>
-      prev.map(c => (c.id === id ? { ...c, ...data } : c))
-    );
-  }, []);
+    // Update contribution status
+    await supabase.from('contributions').update({ status: 'approved', is_new: false }).eq('id', id);
+
+    // Update or insert faculty
+    const { data: existing } = await supabase
+      .from('faculty')
+      .select('id')
+      .ilike('name', contribution.facultyName)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from('faculty').update({
+        cabin: contribution.cabin,
+        department: contribution.department,
+        contributed_by: contribution.studentName,
+      }).eq('id', existing.id);
+    } else {
+      await supabase.from('faculty').insert({
+        name: contribution.facultyName,
+        cabin: contribution.cabin,
+        department: contribution.department,
+        contributed_by: contribution.studentName,
+      });
+    }
+
+    await Promise.all([fetchFaculty(), fetchContributions()]);
+  }, [contributions, fetchFaculty, fetchContributions]);
+
+  const rejectContribution = useCallback(async (id: string) => {
+    await supabase.from('contributions').update({ status: 'rejected', is_new: false }).eq('id', id);
+    await fetchContributions();
+  }, [fetchContributions]);
+
+  const editContribution = useCallback(async (id: string, data: Partial<Contribution>) => {
+    const updateData: Record<string, unknown> = {};
+    if (data.facultyName !== undefined) updateData.faculty_name = data.facultyName;
+    if (data.cabin !== undefined) updateData.cabin = data.cabin;
+    if (data.department !== undefined) updateData.department = data.department;
+    
+    await supabase.from('contributions').update(updateData).eq('id', id);
+    await fetchContributions();
+  }, [fetchContributions]);
 
   const loginAdmin = useCallback((username: string, password: string): boolean => {
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
@@ -136,20 +164,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsAdmin(false);
   }, []);
 
-  const uploadFacultyData = useCallback((data: Omit<Faculty, 'id' | 'contributedBy'>[]) => {
-    const newFaculty: Faculty[] = data.map((item, index) => ({
-      ...item,
-      id: `uploaded-${Date.now()}-${index}`,
-      contributedBy: 'KLEF',
+  const uploadFacultyData = useCallback(async (data: Omit<Faculty, 'id' | 'contributedBy'>[]) => {
+    const rows = data.map(item => ({
+      name: item.name,
+      cabin: item.cabin,
+      department: item.department,
+      contributed_by: 'KLEF',
     }));
-    setFaculty(prev => [...prev, ...newFaculty]);
-  }, []);
+    await supabase.from('faculty').insert(rows);
+    await fetchFaculty();
+  }, [fetchFaculty]);
 
-  const markContributionViewed = useCallback((id: string) => {
-    setContributions(prev =>
-      prev.map(c => (c.id === id ? { ...c, isNew: false } : c))
-    );
-  }, []);
+  const markContributionViewed = useCallback(async (id: string) => {
+    await supabase.from('contributions').update({ is_new: false }).eq('id', id);
+    await fetchContributions();
+  }, [fetchContributions]);
 
   return (
     <AppContext.Provider
@@ -157,7 +186,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         faculty,
         contributions,
         isAdmin,
-        setFaculty,
+        loading,
         addContribution,
         approveContribution,
         rejectContribution,
@@ -166,6 +195,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         logoutAdmin,
         uploadFacultyData,
         markContributionViewed,
+        refreshFaculty: fetchFaculty,
+        refreshContributions: fetchContributions,
       }}
     >
       {children}
